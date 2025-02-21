@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>币安价格分析</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .last-update {
+            margin-bottom: 20px;
+            color: #666;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress {
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s ease;
+        }
+        .nav-links {
+            margin-bottom: 20px;
+        }
+        .nav-links a {
+            color: #4CAF50;
+            text-decoration: none;
+            margin-right: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-links">
+            <a href="index.html">返回交易量监控</a>
+        </div>
+        <h1>币安价格分析（180天）</h1>
+        <div class="last-update">
+            最后更新时间: <span id="updateTime"></span>
+            <br>
+            下次更新倒计时: <span id="countdown">300</span> 秒
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>交易对</th>
+                    <th>现价</th>
+                    <th>180天最高价</th>
+                    <th>180天最低价</th>
+                    <th>当前位置</th>
+                    <th>位置比例</th>
+                </tr>
+            </thead>
+            <tbody id="analysisData">
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let countdownInterval;
+
+        async function fetchKlines(symbol) {
+            try {
+                const response = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&limit=180`);
+                const data = await response.json();
+                const prices = data.map(item => parseFloat(item[4])); // 收盘价
+                return {
+                    high: Math.max(...prices),
+                    low: Math.min(...prices)
+                };
+            } catch (error) {
+                console.error(`获取${symbol}K线数据失败:`, error);
+                return null;
+            }
+        }
+
+        async function fetchAnalysisData() {
+            try {
+                // 获取24小时交易统计
+                const response = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+                const data = await response.json();
+
+                // 过滤USDT交易对且交易量大于1000万
+                const filteredData = data.filter(item => 
+                    item.symbol.endsWith('USDT') && 
+                    parseFloat(item.quoteVolume) >= 10000000
+                );
+
+                // 获取每个交易对的K线数据
+                const analysisPromises = filteredData.map(async item => {
+                    const klineData = await fetchKlines(item.symbol);
+                    if (!klineData) return null;
+
+                    const currentPrice = parseFloat(item.lastPrice);
+                    const ratio = (currentPrice - klineData.low) / (klineData.high - klineData.low);
+
+                    return {
+                        symbol: item.symbol,
+                        currentPrice: currentPrice,
+                        highPrice: klineData.high,
+                        lowPrice: klineData.low,
+                        ratio: ratio
+                    };
+                });
+
+                const analysisResults = (await Promise.all(analysisPromises))
+                    .filter(item => item !== null)
+                    .sort((a, b) => a.ratio - b.ratio)
+                    .slice(0, 20);
+
+                // 更新表格
+                const tbody = document.getElementById('analysisData');
+                tbody.innerHTML = '';
+
+                analysisResults.forEach(item => {
+                    const row = document.createElement('tr');
+                    const ratio = (item.ratio * 100).toFixed(2);
+                    row.innerHTML = `
+                        <td>${item.symbol.replace('USDT', '')}/USDT</td>
+                        <td>${item.currentPrice.toFixed(4)}</td>
+                        <td>${item.highPrice.toFixed(4)}</td>
+                        <td>${item.lowPrice.toFixed(4)}</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress" style="width: ${ratio}%"></div>
+                            </div>
+                        </td>
+                        <td>${ratio}%</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                // 更新时间
+                const now = new Date();
+                document.getElementById('updateTime').textContent = 
+                    now.toLocaleString('zh-CN', { hour12: false });
+
+                // 重置倒计时
+                resetCountdown();
+
+            } catch (error) {
+                console.error('获取数据失败:', error);
+            }
+        }
+
+        function resetCountdown() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+
+            let countdown = 300;
+            document.getElementById('countdown').textContent = countdown;
+
+            countdownInterval = setInterval(() => {
+                countdown--;
+                document.getElementById('countdown').textContent = countdown;
+                
+                if (countdown <= 0) {
+                    fetchAnalysisData();
+                }
+            }, 1000);
+        }
+
+        // 首次加载
+        fetchAnalysisData();
+
+        // 添加自动刷新功能
+        setInterval(fetchAnalysisData, 5 * 60 * 1000);
+
+        // 页面可见性改变时的处理
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                fetchAnalysisData();
+            }
+        });
+    </script>
+</body>
+</html> 
