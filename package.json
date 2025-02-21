@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "name": "binance-volume-monitor",
   "version": "1.0.0",
@@ -10,3 +11,17 @@
     "serve": "^14.0.0"
   }
 } 
+=======
+   {
+     "name": "binance-volume-monitor",
+     "version": "1.0.0",
+     "description": "币安大额交易监控",
+     "scripts": {
+       "build": "echo 'No build required'",
+       "start": "serve"
+     },
+     "dependencies": {
+       "serve": "^14.0.0"
+     }
+   }
+>>>>>>> a0770b5cac435d45b612f5c01a8a531d5b2e2bbc

@@ -60,7 +60,7 @@
 <body>
     <div class="container">
         <div class="nav-links">
-            <a href="index.html">返回交易量监控</a>
+            <a href="/index.html">返回交易量监控</a>
         </div>
         <h1>币安价格分析（180天）</h1>
         <div class="last-update">
@@ -75,6 +75,7 @@
                     <th>现价</th>
                     <th>180天最高价</th>
                     <th>180天最低价</th>
+                    <th>最大跌幅</th>
                     <th>当前位置</th>
                     <th>位置比例</th>
                 </tr>
@@ -143,11 +144,13 @@
                 analysisResults.forEach(item => {
                     const row = document.createElement('tr');
                     const ratio = (item.ratio * 100).toFixed(2);
+                    const dropPercent = ((item.highPrice - item.currentPrice) / item.highPrice * 100).toFixed(2);
                     row.innerHTML = `
                         <td>${item.symbol.replace('USDT', '')}/USDT</td>
                         <td>${item.currentPrice.toFixed(4)}</td>
                         <td>${item.highPrice.toFixed(4)}</td>
                         <td>${item.lowPrice.toFixed(4)}</td>
+                        <td class="volume-down">-${dropPercent}%</td>
                         <td>
                             <div class="progress-bar">
                                 <div class="progress" style="width: ${ratio}%"></div>
