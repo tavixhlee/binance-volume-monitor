@@ -1,11 +1,12 @@
-{
-  "name": "binance-volume-monitor",
-  "version": "1.0.0",
-  "description": "币安大额交易监控",
-  "scripts": {
-    "start": "serve"
-  },
-  "dependencies": {
-    "serve": "^14.0.0"
-  }
-} 
+   {
+     "name": "binance-volume-monitor",
+     "version": "1.0.0",
+     "description": "币安大额交易监控",
+     "scripts": {
+       "build": "echo 'No build required'",
+       "start": "serve"
+     },
+     "dependencies": {
+       "serve": "^14.0.0"
+     }
+   }
