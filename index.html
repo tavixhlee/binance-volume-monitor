@@ -46,7 +46,11 @@
 <body>
     <div class="container">
         <h1>币安大额交易监控</h1>
-        <div class="last-update">最后更新时间: <span id="updateTime"></span></div>
+        <div class="last-update">
+            最后更新时间: <span id="updateTime"></span>
+            <br>
+            下次更新倒计时: <span id="countdown">300</span> 秒
+        </div>
         <table>
             <thead>
                 <tr>
@@ -63,6 +67,7 @@
 
     <script>
         let previousData = new Map();
+        let countdownInterval;
 
         async function fetchTradingData() {
             try {
@@ -108,16 +113,49 @@
                 document.getElementById('updateTime').textContent = 
                     now.toLocaleString('zh-CN', { hour12: false });
 
+                // 重置倒计时
+                resetCountdown();
+
             } catch (error) {
                 console.error('获取数据失败:', error);
             }
         }
 
+        function resetCountdown() {
+            // 清除现有的倒计时
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+
+            // 设置倒计时为300秒（5分钟）
+            let countdown = 300;
+            document.getElementById('countdown').textContent = countdown;
+
+            // 启动新的倒计时
+            countdownInterval = setInterval(() => {
+                countdown--;
+                document.getElementById('countdown').textContent = countdown;
+                
+                // 当倒计时到0时，刷新数据
+                if (countdown <= 0) {
+                    fetchTradingData();
+                }
+            }, 1000);
+        }
+
         // 首次加载
         fetchTradingData();
 
-        // 每5分钟更新一次
+        // 添加自动刷新功能
         setInterval(fetchTradingData, 5 * 60 * 1000);
+
+        // 页面可见性改变时的处理
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                // 页面变为可见时，立即获取新数据
+                fetchTradingData();
+            }
+        });
     </script>
 </body>
 </html> 
