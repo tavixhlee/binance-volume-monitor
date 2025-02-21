@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "币安大额交易监控",
   "scripts": {
-    "build": "echo 'No build required'",
     "start": "serve"
   },
   "dependencies": {
