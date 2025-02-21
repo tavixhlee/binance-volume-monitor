@@ -61,6 +61,12 @@
             background-color: #4CAF50;
             transition: width 0.3s ease;
         }
+        .section {
+            margin-bottom: 40px;
+        }
+        .section h1 {
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -69,37 +75,59 @@
             <a href="/index.html">返回交易量监控</a>
             <a href="/analysis.html">查看价格分析</a>
         </div>
-        <h1>币安日K下影线监控</h1>
-        <div class="last-update">
-            最后更新时间: <span id="updateTime"></span>
-            <br>
-            下次更新倒计时: <span id="countdown">300</span> 秒
+        <div class="section">
+            <h1>币安日K下影线监控</h1>
+            <div class="last-update">
+                最后更新时间: <span id="updateTime"></span>
+                <br>
+                下次更新倒计时: <span id="countdown">300</span> 秒
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>交易对</th>
+                        <th>当前价格</th>
+                        <th>开盘价</th>
+                        <th>最高价</th>
+                        <th>最低价</th>
+                        <th>下影线比例</th>
+                        <th>24h交易量</th>
+                        <th>24h涨跌幅</th>
+                    </tr>
+                </thead>
+                <tbody id="hammerData">
+                </tbody>
+            </table>
         </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>交易对</th>
-                    <th>当前价格</th>
-                    <th>开盘价</th>
-                    <th>最高价</th>
-                    <th>最低价</th>
-                    <th>下影线比例</th>
-                    <th>24h交易量</th>
-                    <th>24h涨跌幅</th>
-                </tr>
-            </thead>
-            <tbody id="hammerData">
-            </tbody>
-        </table>
+        
+        <div class="section">
+            <h1>币安4小时下影线监控</h1>
+            <table>
+                <thead>
+                    <tr>
+                        <th>交易对</th>
+                        <th>当前价格</th>
+                        <th>开盘价</th>
+                        <th>最高价</th>
+                        <th>最低价</th>
+                        <th>下影线比例</th>
+                        <th>24h交易量</th>
+                        <th>24h涨跌幅</th>
+                    </tr>
+                </thead>
+                <tbody id="hammer4hData">
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>
         let countdownInterval;
 
-        async function fetchCandleData(symbol) {
+        async function fetchCandleData(symbol, interval) {
             try {
                 // 获取最近的K线数据
-                const response = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&limit=1`);
+                const response = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=1`);
                 const data = await response.json();
                 const candle = data[0];
                 return {
@@ -114,7 +142,73 @@
             }
         }
 
-        async function fetchHammerData() {
+        async function processHammerData(data, interval, targetElement) {
+            // 获取每个交易对的K线数据
+            const hammerPromises = data.map(async item => {
+                const candleData = await fetchCandleData(item.symbol, interval);
+                if (!candleData) return null;
+
+                // 计算下影线比例
+                const bodySize = Math.abs(candleData.closePrice - candleData.openPrice);
+                const lowerShadow = Math.min(candleData.openPrice, candleData.closePrice) - candleData.lowPrice;
+                const shadowRatio = lowerShadow / (bodySize || 1);
+
+                // 计算振幅
+                const amplitude = ((candleData.highPrice - candleData.lowPrice) / candleData.lowPrice * 100);
+
+                return {
+                    symbol: item.symbol,
+                    currentPrice: parseFloat(item.lastPrice),
+                    openPrice: candleData.openPrice,
+                    highPrice: candleData.highPrice,
+                    lowPrice: candleData.lowPrice,
+                    shadowRatio: shadowRatio,
+                    volume: parseFloat(item.quoteVolume),
+                    priceChange: parseFloat(item.priceChangePercent),
+                    amplitude: amplitude
+                };
+            });
+
+            const hammerResults = (await Promise.all(hammerPromises))
+                .filter(item => item !== null && 
+                    item.shadowRatio > 2 && 
+                    item.amplitude >= 5
+                )
+                .sort((a, b) => b.shadowRatio - a.shadowRatio);
+
+            // 更新表格
+            const tbody = document.getElementById(targetElement);
+            tbody.innerHTML = '';
+
+            hammerResults.forEach(item => {
+                const row = document.createElement('tr');
+                const volume = (item.volume / 1000000).toFixed(2);
+                const amplitude = item.amplitude.toFixed(2);
+                row.innerHTML = `
+                    <td>${item.symbol.replace('USDT', '')}/USDT</td>
+                    <td>${item.currentPrice.toFixed(4)}</td>
+                    <td>${item.openPrice.toFixed(4)}</td>
+                    <td>${item.highPrice.toFixed(4)}</td>
+                    <td>${item.lowPrice.toFixed(4)}</td>
+                    <td>
+                        <div class="shadow-bar">
+                            <div class="shadow" style="width: ${Math.min(item.shadowRatio * 20, 100)}%"></div>
+                        </div>
+                        ${item.shadowRatio.toFixed(2)}x
+                    </td>
+                    <td>${volume}M</td>
+                    <td>
+                        <div class="${item.priceChange >= 0 ? 'volume-up' : 'volume-down'}">
+                            ${item.priceChange.toFixed(2)}%
+                        </div>
+                        <div>振幅: ${amplitude}%</div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function fetchAllHammerData() {
             try {
                 // 获取24小时交易统计
                 const response = await fetch('https://api.binance.com/api/v3/ticker/24hr');
@@ -126,69 +220,11 @@
                     parseFloat(item.quoteVolume) >= 10000000
                 );
 
-                // 获取每个交易对的K线数据
-                const hammerPromises = filteredData.map(async item => {
-                    const candleData = await fetchCandleData(item.symbol);
-                    if (!candleData) return null;
-
-                    // 计算下影线比例
-                    const bodySize = Math.abs(candleData.closePrice - candleData.openPrice);
-                    const lowerShadow = Math.min(candleData.openPrice, candleData.closePrice) - candleData.lowPrice;
-                    const shadowRatio = lowerShadow / (bodySize || 1); // 避免除以0
-
-                    // 计算振幅
-                    const amplitude = ((candleData.highPrice - candleData.lowPrice) / candleData.lowPrice * 100);
-
-                    return {
-                        symbol: item.symbol,
-                        currentPrice: parseFloat(item.lastPrice),
-                        openPrice: candleData.openPrice,
-                        highPrice: candleData.highPrice,
-                        lowPrice: candleData.lowPrice,
-                        shadowRatio: shadowRatio,
-                        volume: parseFloat(item.quoteVolume),
-                        priceChange: parseFloat(item.priceChangePercent),
-                        amplitude: amplitude
-                    };
-                });
-
-                const hammerResults = (await Promise.all(hammerPromises))
-                    .filter(item => item !== null && 
-                        item.shadowRatio > 2 && // 下影线至少是实体的2倍
-                        item.amplitude >= 5 // 振幅至少5%
-                    )
-                    .sort((a, b) => b.shadowRatio - a.shadowRatio);
-
-                // 更新表格
-                const tbody = document.getElementById('hammerData');
-                tbody.innerHTML = '';
-
-                hammerResults.forEach(item => {
-                    const row = document.createElement('tr');
-                    const volume = (item.volume / 1000000).toFixed(2);
-                    const amplitude = item.amplitude.toFixed(2);
-                    row.innerHTML = `
-                        <td>${item.symbol.replace('USDT', '')}/USDT</td>
-                        <td>${item.currentPrice.toFixed(4)}</td>
-                        <td>${item.openPrice.toFixed(4)}</td>
-                        <td>${item.highPrice.toFixed(4)}</td>
-                        <td>${item.lowPrice.toFixed(4)}</td>
-                        <td>
-                            <div class="shadow-bar">
-                                <div class="shadow" style="width: ${Math.min(item.shadowRatio * 20, 100)}%"></div>
-                            </div>
-                            ${item.shadowRatio.toFixed(2)}x
-                        </td>
-                        <td>${volume}M</td>
-                        <td>
-                            <div class="${item.priceChange >= 0 ? 'volume-up' : 'volume-down'}">
-                                ${item.priceChange.toFixed(2)}%
-                            </div>
-                            <div>振幅: ${amplitude}%</div>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
+                // 处理日K数据
+                await processHammerData(filteredData, '1d', 'hammerData');
+                
+                // 处理4小时K线数据
+                await processHammerData(filteredData, '4h', 'hammer4hData');
 
                 // 更新时间
                 const now = new Date();
@@ -216,21 +252,21 @@
                 document.getElementById('countdown').textContent = countdown;
                 
                 if (countdown <= 0) {
-                    fetchHammerData();
+                    fetchAllHammerData();
                 }
             }, 1000);
         }
 
         // 首次加载
-        fetchHammerData();
+        fetchAllHammerData();
 
         // 添加自动刷新功能
-        setInterval(fetchHammerData, 5 * 60 * 1000);
+        setInterval(fetchAllHammerData, 5 * 60 * 1000);
 
         // 页面可见性改变时的处理
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                fetchHammerData();
+                fetchAllHammerData();
             }
         });
     </script>
