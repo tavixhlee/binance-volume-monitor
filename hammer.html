@@ -148,10 +148,13 @@
                 const candleData = await fetchCandleData(item.symbol, interval);
                 if (!candleData) return null;
 
-                // 计算下影线比例
-                const bodySize = Math.abs(candleData.closePrice - candleData.openPrice);
-                const lowerShadow = Math.min(candleData.openPrice, candleData.closePrice) - candleData.lowPrice;
-                const shadowRatio = lowerShadow / (bodySize || 1);
+                // 计算K线各部分
+                const bodySize = Math.abs(candleData.closePrice - candleData.openPrice); // K线实体长度
+                const totalHeight = candleData.highPrice - candleData.lowPrice; // K线总高度
+                const lowerShadow = Math.min(candleData.openPrice, candleData.closePrice) - candleData.lowPrice; // 下影线长度
+                
+                // 计算下影线占总高度的比例
+                const shadowRatio = lowerShadow / totalHeight;
 
                 // 计算振幅
                 const amplitude = ((candleData.highPrice - candleData.lowPrice) / candleData.lowPrice * 100);
@@ -163,6 +166,8 @@
                     highPrice: candleData.highPrice,
                     lowPrice: candleData.lowPrice,
                     shadowRatio: shadowRatio,
+                    bodySize: bodySize,
+                    totalHeight: totalHeight,
                     volume: parseFloat(item.quoteVolume),
                     priceChange: parseFloat(item.priceChangePercent),
                     amplitude: amplitude
@@ -171,12 +176,13 @@
 
             const hammerResults = (await Promise.all(hammerPromises))
                 .filter(item => item !== null && 
-                    item.shadowRatio > 2 && 
-                    item.amplitude >= 5
+                    item.shadowRatio > 0.5 && // 下影线占总高度的50%以上
+                    item.bodySize / item.totalHeight < 0.3 && // 实体部分不超过总高度的30%
+                    item.amplitude >= 5 // 振幅至少5%
                 )
                 .sort((a, b) => b.shadowRatio - a.shadowRatio);
 
-            // 更新表格
+            // 更新表格显示
             const tbody = document.getElementById(targetElement);
             tbody.innerHTML = '';
 
@@ -184,6 +190,8 @@
                 const row = document.createElement('tr');
                 const volume = (item.volume / 1000000).toFixed(2);
                 const amplitude = item.amplitude.toFixed(2);
+                const shadowPercent = (item.shadowRatio * 100).toFixed(2);
+                const bodyPercent = (item.bodySize / item.totalHeight * 100).toFixed(2);
                 row.innerHTML = `
                     <td>${item.symbol.replace('USDT', '')}/USDT</td>
                     <td>${item.currentPrice.toFixed(4)}</td>
@@ -192,9 +200,10 @@
                     <td>${item.lowPrice.toFixed(4)}</td>
                     <td>
                         <div class="shadow-bar">
-                            <div class="shadow" style="width: ${Math.min(item.shadowRatio * 20, 100)}%"></div>
+                            <div class="shadow" style="width: ${shadowPercent}%"></div>
                         </div>
-                        ${item.shadowRatio.toFixed(2)}x
+                        下影线: ${shadowPercent}%<br>
+                        实体: ${bodyPercent}%
                     </td>
                     <td>${volume}M</td>
                     <td>
